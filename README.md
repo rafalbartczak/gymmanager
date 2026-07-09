@@ -1,4 +1,4 @@
-# GymManager — Fitness Club Management System
+# GymManager - Fitness Club Management System
 
 A single-page web application developed as an engineering thesis project for a Software Engineering degree.
 
