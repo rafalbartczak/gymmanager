@@ -1,0 +1,181 @@
+﻿@page "/classes/schedule"
+<PageTitle>Harmonogram zajęć</PageTitle>
+
+@using System.Net.Http.Json
+@using GymManager.Client.Contracts
+@using GymManager.Client.Services
+@inject ApiHttpClient Api
+@inject NavigationManager Nav
+
+<h3 class="page-title">Harmonogram zajęć</h3>
+
+@if (!string.IsNullOrWhiteSpace(msg))
+{
+    <div class="alert-success">@msg</div>
+}
+@if (!string.IsNullOrWhiteSpace(err))
+{
+    <div class="alert-error">@err</div>
+}
+
+@* === MOJE NADCHODZĄCE ZAJĘCIA === *@
+@if (myClasses is not null && myClasses.Count > 0)
+{
+    <div class="gym-card" style="border-left:4px solid var(--accent-color, #00b4d8); margin-bottom:20px;">
+        <h4 style="margin-top:0;">Moje zajęcia (@myClasses.Count)</h4>
+        @foreach (var s in myClasses)
+        {
+            <div style="padding:10px 0; border-bottom:1px solid rgba(0,0,0,0.08); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <div>
+                    <strong>@s.ClassTypeName</strong>
+                    <div style="font-size:0.9em; opacity:0.8;">
+                        📅 @s.StartAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm") — @s.EndAt.ToLocalTime().ToString("HH:mm")
+                    </div>
+                </div>
+                <button class="btn-secondary-gym" style="padding:6px 16px; min-width:auto; border-color:#dc3545; color:#dc3545; font-size:0.9em;"
+                        disabled="@busy" @onclick="() => Cancel(s.ClassSessionId)">
+                    Anuluj
+                </button>
+            </div>
+        }
+    </div>
+}
+
+@* === HARMONOGRAM === *@
+@if (items is null)
+{
+    <p>Ładowanie...</p>
+}
+else if (items.Count == 0)
+{
+    <p>Brak nadchodzących zajęć w grafiku.</p>
+}
+else
+{
+    @foreach (var s in items)
+    {
+        <div class="gym-card">
+            <h4 style="margin-top:0;">@s.ClassTypeName</h4>
+            <div style="margin:8px 0;">
+                📅 @s.StartAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm") — @s.EndAt.ToLocalTime().ToString("HH:mm")
+            </div>
+            <div style="margin:8px 0;">
+                👥 Miejsca: @s.Remaining / @s.Capacity (zapisanych: @s.ReservedCount)
+            </div>
+
+            @if (s.IsCanceled)
+            {
+                <div class="status-inactive" style="margin:10px 0;">❌ Zajęcia odwołane</div>
+            }
+            else
+            {
+                <div style="margin-top:15px;">
+                    @if (s.ReservedByMe)
+                    {
+                        <button class="btn-secondary-gym" style="min-width:150px; border-color:#dc3545; color:#dc3545;" disabled="@busy" @onclick="() => Cancel(s.ClassSessionId)">
+                            Anuluj rezerwację
+                        </button>
+                    }
+                    else if (s.Remaining <= 0)
+                    {
+                        <button class="btn-secondary-gym" style="min-width:150px;" disabled>Brak miejsc</button>
+                    }
+                    else
+                    {
+                        <button class="btn-primary-gym" style="min-width:150px;" disabled="@busy" @onclick="() => Reserve(s.ClassSessionId)">
+                            Zapisz się
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    }
+}
+
+@code {
+    List<ClassSessionDto>? items;
+    List<ClassSessionDto>? myClasses;
+    bool busy = false;
+    string? msg;
+    string? err;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        msg = null;
+        err = null;
+
+        try
+        {
+            // Harmonogram — tylko przyszłe, nieodwołane (domyślne filtrowanie backendu)
+            items = await Api.Http.GetFromJsonAsync<List<ClassSessionDto>>("classes/schedule");
+
+            // Moje nadchodzące zajęcia
+            myClasses = await Api.Http.GetFromJsonAsync<List<ClassSessionDto>>("classes/me");
+        }
+        catch
+        {
+            Nav.NavigateTo("/login");
+        }
+    }
+
+    private async Task Reserve(Guid sessionId)
+    {
+        busy = true;
+        msg = null;
+        err = null;
+
+        try
+        {
+            var res = await Api.Http.PostAsync($"classes/sessions/{sessionId}/reserve", null);
+            if (!res.IsSuccessStatusCode)
+            {
+                err = "Nie udało się zapisać na zajęcia.";
+                return;
+            }
+
+            msg = "Zapisano na zajęcia!";
+            await Load();
+        }
+        catch
+        {
+            err = "Błąd zapisu.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task Cancel(Guid sessionId)
+    {
+        busy = true;
+        msg = null;
+        err = null;
+
+        try
+        {
+            var res = await Api.Http.DeleteAsync($"classes/sessions/{sessionId}/reserve");
+            if (!res.IsSuccessStatusCode)
+            {
+                err = "Nie udało się anulować rezerwacji.";
+                return;
+            }
+
+            msg = "Anulowano rezerwację.";
+            await Load();
+        }
+        catch
+        {
+            err = "Błąd anulowania.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

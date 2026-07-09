@@ -1,0 +1,86 @@
+﻿@page "/"
+<PageTitle>GymManager - Klub Fitness</PageTitle>
+
+@using GymManager.Client.Services.Auth
+@inject TokenStore Tokens
+@inject NavigationManager Nav
+
+@if (isChecking)
+{
+    <p>Ładowanie...</p>
+}
+else if (isLoggedIn)
+{
+    @* === DASHBOARD ZALOGOWANEGO UŻYTKOWNIKA === *@
+    <div class="nav-buttons">
+        @if (isAdmin && !showUserPanel)
+        {
+            @* Menu admina *@
+            <a href="/admin/users" class="btn-primary-gym">👥 Lista użytkowników</a>
+            <a href="/admin/classes" class="btn-secondary-gym">🗓️ Zarządzanie zajęciami</a>
+            <a href="/admin/scanner" class="btn-primary-gym">📷 Skaner wejść</a>
+            <a href="/admin/entries" class="btn-secondary-gym">📋 Historia wejść</a>
+            <a href="/admin/announcements" class="btn-primary-gym">📢 Zarządzanie ogłoszeniami</a>
+            <button @onclick="ToggleUserPanel" class="btn-secondary-gym">👤 Panel użytkownika</button>
+        }
+        else
+        {
+            @* Menu użytkownika *@
+            <a href="/passes/buy" class="btn-primary-gym">🎫 Kup karnet</a>
+            <a href="/passes/me" class="btn-secondary-gym">💳 Moje karnety</a>
+            <a href="/classes/schedule" class="btn-primary-gym">🗓️ Zajęcia</a>
+            <a href="/checkin" class="btn-secondary-gym">✅ Zarejestruj wejście</a>
+            <a href="/my-qrcode" class="btn-primary-gym">📱 Mój kod QR</a>
+            <a href="/entries/me" class="btn-secondary-gym">📋 Historia wejść</a>
+            <a href="/announcements" class="btn-primary-gym">🔔 Powiadomienia</a>
+
+            @if (isAdmin && showUserPanel)
+            {
+                <button @onclick="ToggleUserPanel" class="btn-secondary-gym">⚙️ Panel admina</button>
+            }
+        }
+    </div>
+}
+else
+{
+    @* === STRONA NIEZALOGOWANEGO === *@
+    <div class="nav-buttons">
+        <a href="/login" class="btn-primary-gym">🔑 Zaloguj się</a>
+        <a href="/register" class="btn-secondary-gym">📝 Zarejestruj się</a>
+    </div>
+}
+
+@code {
+    bool isChecking = true;
+    bool isLoggedIn = false;
+    bool isAdmin = false;
+    bool showUserPanel = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var token = await Tokens.GetAccessTokenAsync();
+
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                isLoggedIn = true;
+                var role = JwtHelper.GetRole(token);
+                isAdmin = string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase);
+            }
+        }
+        catch
+        {
+            isLoggedIn = false;
+        }
+        finally
+        {
+            isChecking = false;
+        }
+    }
+
+    private void ToggleUserPanel()
+    {
+        showUserPanel = !showUserPanel;
+    }
+}

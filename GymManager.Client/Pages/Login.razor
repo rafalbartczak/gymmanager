@@ -1,0 +1,56 @@
+﻿@page "/login"
+<PageTitle>Logowanie - GymManager</PageTitle>
+
+@using GymManager.Client.Services.Auth
+@inject AuthApiClient Auth
+@inject TokenStore Tokens
+@inject NavigationManager Nav
+
+<div class="gym-form">
+	@if (!string.IsNullOrWhiteSpace(error))
+	{
+		<div class="alert-error">@error</div>
+	}
+
+	<div class="form-group">
+		<label>Email</label>
+		<input type="email" @bind="email" placeholder="jan@example.com" />
+	</div>
+
+	<div class="form-group">
+		<label>Hasło</label>
+		<input type="password" @bind="password" placeholder="" />
+	</div>
+
+	<button class="btn-primary-gym" style="width:100%;" disabled="@isBusy" @onclick="DoLogin">
+		@(isBusy ? "Logowanie..." : "Zaloguj się")
+	</button>
+</div>
+
+@code {
+	string email = "";
+	string password = "";
+	string? error;
+	bool isBusy = false;
+
+	private async Task DoLogin()
+	{
+		error = null;
+		isBusy = true;
+
+		try
+		{
+			var res = await Auth.LoginAsync(email, password);
+			await Tokens.SetTokensAsync(res.AccessToken, res.RefreshToken);
+			Nav.NavigateTo("/");
+		}
+		catch
+		{
+			error = "Nieprawidłowy email lub hasło.";
+		}
+		finally
+		{
+			isBusy = false;
+		}
+	}
+}

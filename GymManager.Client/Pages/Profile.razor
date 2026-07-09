@@ -1,0 +1,336 @@
+﻿@page "/profile"
+<PageTitle>Mój profil</PageTitle>
+
+@using System.Net.Http.Json
+@using GymManager.Client.Services
+@using GymManager.Client.Services.Auth
+@inject ApiHttpClient Api
+@inject TokenStore Tokens
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<h3 class="page-title">Mój profil</h3>
+
+@if (isLoading)
+{
+    <p>Ładowanie...</p>
+}
+else
+{
+    <div style="display:flex; flex-direction:column; align-items:center; gap:20px; width:100%;">
+
+        @if (!string.IsNullOrWhiteSpace(successMsg))
+        {
+            <div class="alert-success" style="width:100%; max-width:500px;">@successMsg</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(errorMsg))
+        {
+            <div class="alert-error" style="width:100%; max-width:500px;">@errorMsg</div>
+        }
+
+        <!-- DANE KONTA -->
+        <div class="gym-card" style="width:100%; max-width:500px;">
+            <h4 style="margin-top:0; text-align:center;">Dane konta</h4>
+            <table style="width:100%; border-collapse:collapse;">
+                <tr>
+                    <td style="padding:8px 10px; font-weight:600; width:50%; text-align:right;">Email:</td>
+                    <td style="padding:8px 10px; width:50%;">@profile?.Email</td>
+                </tr>
+                <tr>
+                    <td style="padding:8px 10px; font-weight:600; text-align:right;">Rola:</td>
+                    <td style="padding:8px 10px;">@profile?.Role</td>
+                </tr>
+                <tr>
+                    <td style="padding:8px 10px; font-weight:600; text-align:right;">Data rejestracji:</td>
+                    <td style="padding:8px 10px;">@profile?.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- EDYCJA DANYCH OSOBOWYCH -->
+        <div class="gym-card" style="width:100%; max-width:500px;">
+            <h4 style="margin-top:0; text-align:center;">Dane osobowe</h4>
+            <div class="gym-form">
+                <div class="form-group">
+                    <label>Imię</label>
+                    <input type="text" @bind="editFirstName" placeholder="Imię" />
+                </div>
+                <div class="form-group">
+                    <label>Nazwisko</label>
+                    <input type="text" @bind="editLastName" placeholder="Nazwisko" />
+                </div>
+            </div>
+        </div>
+
+        <!-- ZMIANA HASŁA -->
+        <div class="gym-card" style="width:100%; max-width:500px;">
+            <h4 style="margin-top:0; text-align:center;">Zmiana hasła</h4>
+            <div class="gym-form">
+                <div class="form-group">
+                    <label>Aktualne hasło</label>
+                    <input type="password" @bind="currentPassword" placeholder="Aktualne hasło" />
+                </div>
+                <div class="form-group">
+                    <label>Nowe hasło (min. 6 znaków)</label>
+                    <input type="password" @bind="newPassword" placeholder="Nowe hasło" />
+                </div>
+            </div>
+            <p style="opacity:0.6; font-size:0.85em; margin-top:5px; text-align:center;">
+                Zostaw puste, jeśli nie chcesz zmieniać hasła.
+            </p>
+        </div>
+
+        <!-- ZGODY MARKETINGOWE -->
+        <div class="gym-card" style="width:100%; max-width:500px; text-align:center;">
+            <h4 style="margin-top:0;">Zgody marketingowe</h4>
+            <div style="display:flex; justify-content:center; margin:15px 0;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                    <input type="checkbox" @bind="marketingConsent" />
+                    <span>Zgadzam się na otrzymywanie informacji marketingowych</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- PRZYCISK ZAPISU -->
+        <div style="width:100%; max-width:500px; text-align:center;">
+            <button class="btn-primary-gym" style="width:100%;" disabled="@isBusy" @onclick="SaveProfile">
+                Zapisz zmiany
+            </button>
+        </div>
+
+        <!-- GDPR -->
+        <div class="gym-card" style="width:100%; max-width:500px; text-align:center;">
+            <h4 style="margin-top:0;">Prywatność i dane (RODO)</h4>
+
+            <p>Możesz pobrać kopię swoich danych w formacie JSON:</p>
+            <button class="btn-secondary-gym" disabled="@isBusy" @onclick="ExportData">
+                Eksportuj moje dane
+            </button>
+
+            <div style="border-top:1px solid rgba(128,128,128,0.3); padding-top:20px; margin-top:20px;">
+                <p style="color:#dc3545; font-weight:600;">Usuń konto</p>
+                <p style="opacity:0.8;">Ta operacja jest nieodwracalna. Wszystkie Twoje dane zostaną usunięte.</p>
+
+                @if (!showDeleteConfirm)
+                {
+                    <button class="btn-secondary-gym" style="border-color:#dc3545; color:#dc3545;" @onclick="() => showDeleteConfirm = true">
+                        Usuń moje konto
+                    </button>
+                }
+                else
+                {
+                    <div style="padding:15px; background:rgba(220,53,69,0.1); border-radius:8px; margin-top:10px; text-align:left;">
+                        <p><strong>Czy na pewno chcesz usunąć konto?</strong></p>
+                        <p>Wpisz "USUŃ" aby potwierdzić:</p>
+                        <input type="text" @bind="deleteConfirmText" style="margin-bottom:10px; max-width:200px;" />
+                        <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
+                            <button class="btn-secondary-gym" style="border-color:#dc3545; color:#dc3545;" disabled="@(deleteConfirmText != "USUŃ" || isBusy)" @onclick="DeleteAccount">
+                                Potwierdź usunięcie
+                            </button>
+                            <button class="btn-secondary-gym" @onclick="() => { showDeleteConfirm = false; deleteConfirmText = string.Empty; }">
+                                Anuluj
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    ProfileDto? profile;
+    bool isLoading = true;
+    bool isBusy = false;
+    bool showDeleteConfirm = false;
+    string deleteConfirmText = "";
+    string? successMsg;
+    string? errorMsg;
+
+    // Edycja
+    string editFirstName = "";
+    string editLastName = "";
+    string currentPassword = "";
+    string newPassword = "";
+    bool marketingConsent = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            profile = await Api.Http.GetFromJsonAsync<ProfileDto>("profile");
+            if (profile is not null)
+            {
+                editFirstName = profile.FirstName ?? "";
+                editLastName = profile.LastName ?? "";
+                marketingConsent = profile.MarketingConsent;
+            }
+        }
+        catch
+        {
+            Nav.NavigateTo("/login");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SaveProfile()
+    {
+        isBusy = true;
+        successMsg = null;
+        errorMsg = null;
+
+        if (string.IsNullOrWhiteSpace(editFirstName))
+        {
+            errorMsg = "Imię nie może być puste.";
+            isBusy = false;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(editLastName))
+        {
+            errorMsg = "Nazwisko nie może być puste.";
+            isBusy = false;
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(newPassword))
+        {
+            if (string.IsNullOrWhiteSpace(currentPassword))
+            {
+                errorMsg = "Podaj aktualne hasło, aby zmienić hasło.";
+                isBusy = false;
+                return;
+            }
+            if (newPassword.Length < 6)
+            {
+                errorMsg = "Nowe hasło musi mieć minimum 6 znaków.";
+                isBusy = false;
+                return;
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(currentPassword))
+        {
+            errorMsg = "Podaj nowe hasło.";
+            isBusy = false;
+            return;
+        }
+
+        try
+        {
+            var payload = new
+            {
+                FirstName = editFirstName.Trim(),
+                LastName = editLastName.Trim(),
+                CurrentPassword = string.IsNullOrWhiteSpace(currentPassword) ? (string?)null : currentPassword,
+                NewPassword = string.IsNullOrWhiteSpace(newPassword) ? (string?)null : newPassword,
+                MarketingConsent = marketingConsent
+            };
+
+            var res = await Api.Http.PutAsJsonAsync("profile", payload);
+
+            if (res.IsSuccessStatusCode)
+            {
+                successMsg = "Zmiany zostały zapisane.";
+                currentPassword = "";
+                newPassword = "";
+                profile = await Api.Http.GetFromJsonAsync<ProfileDto>("profile");
+            }
+            else
+            {
+                var body = await res.Content.ReadAsStringAsync();
+                errorMsg = !string.IsNullOrWhiteSpace(body) ? body : "Nie udało się zapisać zmian.";
+            }
+        }
+        catch
+        {
+            errorMsg = "Błąd połączenia.";
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task ExportData()
+    {
+        isBusy = true;
+        successMsg = null;
+        errorMsg = null;
+
+        try
+        {
+            var res = await Api.Http.GetAsync("profile/export");
+            if (res.IsSuccessStatusCode)
+            {
+                var content = await res.Content.ReadAsStringAsync();
+                var bytes = System.Text.Encoding.UTF8.GetBytes(content);
+                var base64 = Convert.ToBase64String(bytes);
+
+                await JS.InvokeVoidAsync("eval", $@"
+                    var a = document.createElement('a');
+                    a.href = 'data:application/json;base64,{base64}';
+                    a.download = 'moje_dane.json';
+                    a.click();
+                ");
+
+                successMsg = "Pobieranie rozpoczęte.";
+            }
+            else
+            {
+                errorMsg = "Nie udało się wyeksportować danych.";
+            }
+        }
+        catch
+        {
+            errorMsg = "Błąd połączenia.";
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task DeleteAccount()
+    {
+        if (deleteConfirmText != "USUŃ") return;
+
+        isBusy = true;
+        errorMsg = null;
+
+        try
+        {
+            var res = await Api.Http.DeleteAsync("profile");
+            if (res.IsSuccessStatusCode)
+            {
+                await Tokens.ClearAsync();
+                Nav.NavigateTo("/login", forceLoad: true);
+            }
+            else
+            {
+                errorMsg = "Nie udało się usunąć konta.";
+            }
+        }
+        catch
+        {
+            errorMsg = "Błąd połączenia.";
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    public class ProfileDto
+    {
+        public Guid UserId { get; set; }
+        public string Email { get; set; } = default!;
+        public string FirstName { get; set; } = default!;
+        public string LastName { get; set; } = default!;
+        public string Role { get; set; } = default!;
+        public bool MarketingConsent { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+}

@@ -1,0 +1,237 @@
+﻿@page "/register"
+<PageTitle>Rejestracja - GymManager</PageTitle>
+
+@using GymManager.Client.Contracts
+@using GymManager.Client.Services.Auth
+@inject AuthApiClient Auth
+@inject TokenStore Tokens
+@inject NavigationManager Nav
+
+<div class="gym-form">
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="alert-error">@error</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(success))
+    {
+        <div class="alert-success">@success</div>
+    }
+
+    <div class="form-row">
+        <div class="form-group">
+            <label>Imię</label>
+            <input type="text" @bind="firstName" placeholder="Jan" />
+        </div>
+        <div class="form-group">
+            <label>Nazwisko</label>
+            <input type="text" @bind="lastName" placeholder="Kowalski" />
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label>Email</label>
+        <input type="email" @bind="email" placeholder="jan@example.com" />
+    </div>
+
+    <div class="form-group">
+        <label>Hasło</label>
+        <input type="password" @bind="password" placeholder="" />
+    </div>
+
+    <div class="checkbox-group">
+        <input type="checkbox" id="terms" @bind="termsAccepted" />
+        <label for="terms">
+            Akceptuję
+            <a href="javascript:void(0)" @onclick="ShowTerms" @onclick:preventDefault style="text-decoration:underline; cursor:pointer;">Regulamin serwisu</a>
+            (wymagany)
+        </label>
+    </div>
+
+    <div class="checkbox-group">
+        <input type="checkbox" id="privacy" @bind="privacyAccepted" />
+        <label for="privacy">
+            Zapoznałem się z
+            <a href="javascript:void(0)" @onclick="ShowPrivacy" @onclick:preventDefault style="text-decoration:underline; cursor:pointer;">Polityką Prywatności</a>
+            (wymagany)
+        </label>
+    </div>
+
+    <button class="btn-primary-gym" style="width:100%;" disabled="@isBusy" @onclick="DoRegister">
+        @(isBusy ? "Rejestracja..." : "Zarejestruj się")
+    </button>
+</div>
+
+<!-- MODAL REGULAMINU / POLITYKI PRYWATNOŚCI -->
+@if (showModal)
+{
+    <div class="modal-overlay" @onclick="CloseModal">
+        <div class="gym-card modal-content" @onclick:stopPropagation>
+            <h3 style="margin-top:0;">@modalTitle</h3>
+            <div style="line-height:1.7; opacity:0.85;">
+                @((MarkupString)modalContent)
+            </div>
+            <div style="text-align:center; margin-top:20px;">
+                <button class="btn-secondary-gym" @onclick="CloseModal">Zamknij</button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        overflow-y: auto;
+    }
+
+    .modal-content {
+        max-width: 600px;
+        width: 100%;
+        max-height: 85vh;
+        overflow-y: auto;
+        margin: auto;
+    }
+</style>
+
+@code {
+    string firstName = "";
+    string lastName = "";
+    string email = "";
+    string password = "";
+    bool termsAccepted = false;
+    bool privacyAccepted = false;
+
+    bool isBusy = false;
+    string? error;
+    string? success;
+
+    // Modal
+    bool showModal = false;
+    string modalTitle = "";
+    string modalContent = "";
+
+    private void ShowTerms()
+    {
+        modalTitle = "Regulamin serwisu GymManager";
+        modalContent = @"
+            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum elit purus, placerat vel consequat sed, fringilla at augue. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Suspendisse eget nisi ut orci lacinia lacinia. Suspendisse potenti. Etiam varius tincidunt tellus eget pulvinar. Aenean at eros lectus. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae; Donec maximus, enim non euismod efficitur, turpis massa tristique sem, eget molestie ante ligula ut turpis. Fusce justo mi, volutpat id massa vel, vestibulum ullamcorper orci. Donec nisi magna, egestas quis imperdiet eu, tincidunt quis nisi. Vivamus auctor mattis leo, vel tempor lorem lobortis quis. Aliquam erat volutpat. Vivamus dignissim sit amet elit aliquam consectetur. Proin in cursus eros, a tempus orci.</p>
+			<p>Integer pretium tellus lectus, non sollicitudin velit auctor accumsan. Ut hendrerit faucibus rhoncus. Nunc id hendrerit velit, nec interdum sem. Proin a elit facilisis, auctor ligula et, auctor sapien. Ut vel tristique justo. Nulla aliquet urna lorem, ac dignissim diam venenatis id. Aliquam erat volutpat. Morbi sed feugiat lacus. Nulla finibus enim sed congue elementum. Donec maximus, ligula imperdiet consectetur lobortis, nibh urna sagittis lorem, sed venenatis sapien tortor quis metus. Integer a condimentum tellus.</p>
+			<p>Nullam pretium eros nunc. Vestibulum faucibus blandit nulla, et aliquet nisl suscipit luctus. Ut ultrices quis ante non rutrum. Curabitur et accumsan purus, in interdum ante. Fusce porta arcu nec nisl commodo, eu lobortis enim tristique. Donec feugiat eros sit amet ante fringilla dignissim. Donec in tincidunt neque, quis dapibus orci. Praesent eu lacinia ex. Integer vitae lorem malesuada est interdum vestibulum. Ut vulputate bibendum risus, sed rhoncus est tincidunt vitae. Nulla pharetra justo in neque rutrum tempor. Mauris commodo mauris at velit varius ultrices. Quisque nec sem ut turpis mattis vulputate. Etiam ac euismod ex. Phasellus finibus ullamcorper risus, ac mollis erat egestas sed. Sed lobortis cursus velit, viverra pharetra tellus ultricies et.</p>
+			<p>Sed vel felis urna. Donec porttitor lectus blandit lectus venenatis, vitae cursus velit viverra. Sed consequat, est a ullamcorper maximus, lorem libero sodales augue, ac dignissim metus sapien et nisl. Mauris id magna tempus, efficitur eros a, dapibus metus. Donec id erat tempus, rutrum ligula vel, eleifend turpis. Integer ut congue nunc. Donec vel consectetur nulla, et feugiat nisi. Aliquam ut justo luctus, cursus felis at, faucibus lacus. Morbi facilisis sit amet mi nec varius.</p>
+			<p>Fusce sed posuere tortor, a malesuada enim. Nulla ultrices purus pharetra, fermentum sapien laoreet, lobortis diam. Proin elit elit, aliquam at faucibus eu, feugiat quis enim. Quisque porttitor molestie magna, vitae sodales turpis elementum eget. Donec accumsan diam nec pulvinar varius. Quisque mattis ornare metus id laoreet. Suspendisse eu fermentum nunc, ac convallis ante.</p>
+        ";
+        showModal = true;
+    }
+
+    private void ShowPrivacy()
+    {
+        modalTitle = "Polityka Prywatności";
+        modalContent = @"
+            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum elit purus, placerat vel consequat sed, fringilla at augue. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Suspendisse eget nisi ut orci lacinia lacinia. Suspendisse potenti. Etiam varius tincidunt tellus eget pulvinar. Aenean at eros lectus. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia curae; Donec maximus, enim non euismod efficitur, turpis massa tristique sem, eget molestie ante ligula ut turpis. Fusce justo mi, volutpat id massa vel, vestibulum ullamcorper orci. Donec nisi magna, egestas quis imperdiet eu, tincidunt quis nisi. Vivamus auctor mattis leo, vel tempor lorem lobortis quis. Aliquam erat volutpat. Vivamus dignissim sit amet elit aliquam consectetur. Proin in cursus eros, a tempus orci.</p>
+			<p>Integer pretium tellus lectus, non sollicitudin velit auctor accumsan. Ut hendrerit faucibus rhoncus. Nunc id hendrerit velit, nec interdum sem. Proin a elit facilisis, auctor ligula et, auctor sapien. Ut vel tristique justo. Nulla aliquet urna lorem, ac dignissim diam venenatis id. Aliquam erat volutpat. Morbi sed feugiat lacus. Nulla finibus enim sed congue elementum. Donec maximus, ligula imperdiet consectetur lobortis, nibh urna sagittis lorem, sed venenatis sapien tortor quis metus. Integer a condimentum tellus.</p>
+			<p>Nullam pretium eros nunc. Vestibulum faucibus blandit nulla, et aliquet nisl suscipit luctus. Ut ultrices quis ante non rutrum. Curabitur et accumsan purus, in interdum ante. Fusce porta arcu nec nisl commodo, eu lobortis enim tristique. Donec feugiat eros sit amet ante fringilla dignissim. Donec in tincidunt neque, quis dapibus orci. Praesent eu lacinia ex. Integer vitae lorem malesuada est interdum vestibulum. Ut vulputate bibendum risus, sed rhoncus est tincidunt vitae. Nulla pharetra justo in neque rutrum tempor. Mauris commodo mauris at velit varius ultrices. Quisque nec sem ut turpis mattis vulputate. Etiam ac euismod ex. Phasellus finibus ullamcorper risus, ac mollis erat egestas sed. Sed lobortis cursus velit, viverra pharetra tellus ultricies et.</p>
+			<p>Sed vel felis urna. Donec porttitor lectus blandit lectus venenatis, vitae cursus velit viverra. Sed consequat, est a ullamcorper maximus, lorem libero sodales augue, ac dignissim metus sapien et nisl. Mauris id magna tempus, efficitur eros a, dapibus metus. Donec id erat tempus, rutrum ligula vel, eleifend turpis. Integer ut congue nunc. Donec vel consectetur nulla, et feugiat nisi. Aliquam ut justo luctus, cursus felis at, faucibus lacus. Morbi facilisis sit amet mi nec varius.</p>
+			<p>Fusce sed posuere tortor, a malesuada enim. Nulla ultrices purus pharetra, fermentum sapien laoreet, lobortis diam. Proin elit elit, aliquam at faucibus eu, feugiat quis enim. Quisque porttitor molestie magna, vitae sodales turpis elementum eget. Donec accumsan diam nec pulvinar varius. Quisque mattis ornare metus id laoreet. Suspendisse eu fermentum nunc, ac convallis ante.</p>
+
+        ";
+        showModal = true;
+    }
+
+    private void CloseModal() => showModal = false;
+
+    private async Task DoRegister()
+    {
+        error = null;
+        success = null;
+
+        if (string.IsNullOrWhiteSpace(firstName))
+        {
+            error = "Podaj imię.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(lastName))
+        {
+            error = "Podaj nazwisko.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            error = "Podaj adres email.";
+            return;
+        }
+
+        if (!email.Contains("@") || !email.Contains(".") || email.Trim().Length < 5)
+        {
+            error = "Podaj poprawny adres email.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(password) || password.Length < 6)
+        {
+            error = "Hasło musi mieć minimum 6 znaków.";
+            return;
+        }
+
+        if (!termsAccepted)
+        {
+            error = "Musisz zaakceptować regulamin.";
+            return;
+        }
+
+        if (!privacyAccepted)
+        {
+            error = "Musisz zaakceptować politykę prywatności.";
+            return;
+        }
+
+        isBusy = true;
+
+        try
+        {
+            var request = new RegisterRequest(
+                email.Trim(),
+                password,
+                firstName.Trim(),
+                lastName.Trim(),
+                termsAccepted,
+                privacyAccepted,
+                false // marketing consent
+            );
+
+            var response = await Auth.RegisterAsync(request);
+            await Tokens.SetTokensAsync(response.AccessToken, response.RefreshToken);
+
+            Nav.NavigateTo("/");
+        }
+        catch (HttpRequestException ex)
+        {
+            if (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                error = "Użytkownik o podanym adresie email już istnieje.";
+            }
+            else
+            {
+                error = "Nie udało się zarejestrować. Spróbuj ponownie.";
+            }
+        }
+        catch
+        {
+            error = "Wystąpił błąd. Spróbuj ponownie.";
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+}

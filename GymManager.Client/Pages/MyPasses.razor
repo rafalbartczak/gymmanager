@@ -1,0 +1,54 @@
+﻿@page "/passes/me"
+<PageTitle>Moje karnety</PageTitle>
+
+@using System.Net.Http.Json
+@using GymManager.Client.Contracts
+@using GymManager.Client.Services
+@inject ApiHttpClient Api
+@inject NavigationManager Nav
+
+<h3 class="page-title">Moje karnety</h3>
+
+@if (items is null)
+{
+	<p>Ładowanie...</p>
+}
+else if (items.Count == 0)
+{
+	<p>Nie posiadasz żadnych karnetów.</p>
+	<div style="margin-top:20px;">
+		<a href="/passes/buy" class="btn-primary-gym">Kup karnet</a>
+	</div>
+}
+else
+{
+	@foreach (var p in items)
+	{
+		<div class="gym-card">
+			<h4 style="margin-top:0;">@p.PassTypeName</h4>
+			<div style="margin:10px 0;">
+				<span class="@(p.Status == "active" ? "status-active" : "status-inactive")">
+					@(p.Status == "active" ? "Aktywny" : "Nieaktywny")
+				</span>
+			</div>
+			<div>Okres: @p.StartAt.ToLocalTime().ToString("yyyy-MM-dd") — @p.EndAt.ToLocalTime().ToString("yyyy-MM-dd")</div>
+			<div>Cena: @p.Price @p.Currency</div>
+		</div>
+	}
+}
+
+@code {
+	List<MyPassItem>? items;
+
+	protected override async Task OnInitializedAsync()
+	{
+		try
+		{
+			items = await Api.Http.GetFromJsonAsync<List<MyPassItem>>("passes/me");
+		}
+		catch
+		{
+			Nav.NavigateTo("/login");
+		}
+	}
+}
