@@ -20,15 +20,16 @@ Aplikacja została zbudowana w architekturze klient-serwer:
 
 1. [Stos technologiczny](#stos-technologiczny)
 2. [Funkcjonalności](#funkcjonalności)
-3. [Wymagania systemowe](#wymagania-systemowe)
-4. [Instalacja narzędzi](#instalacja-narzędzi)
-5. [Uruchomienie bazy danych](#uruchomienie-bazy-danych)
-6. [Uruchomienie aplikacji](#uruchomienie-aplikacji)
-7. [Pierwsze logowanie i konto administratora](#pierwsze-logowanie-i-konto-administratora)
-8. [Struktura projektu](#struktura-projektu)
-9. [Endpointy API](#endpointy-api)
-10. [Rozwiązywanie problemów](#rozwiązywanie-problemów)
-11. [Autor](#autor)
+3. [Zrzuty ekranu](#zrzuty-ekranu)
+4. [Wymagania systemowe](#wymagania-systemowe)
+5. [Instalacja narzędzi](#instalacja-narzędzi)
+6. [Uruchomienie bazy danych](#uruchomienie-bazy-danych)
+7. [Uruchomienie aplikacji](#uruchomienie-aplikacji)
+8. [Pierwsze logowanie i konto administratora](#pierwsze-logowanie-i-konto-administratora)
+9. [Struktura projektu](#struktura-projektu)
+10. [Endpointy API](#endpointy-api)
+11. [Rozwiązywanie problemów](#rozwiązywanie-problemów)
+12. [Autor](#autor)
 
 ---
 
@@ -80,6 +81,44 @@ Aplikacja została zbudowana w architekturze klient-serwer:
 - publikowanie i ukrywanie ogłoszeń.
 
 ---
+
+## Zrzuty ekranu
+
+### Strona główna / panel administratora
+
+![Strona główna / panel administratora](docs/screenshots/home.png)
+
+### Logowanie
+
+![Logowanie](docs/screenshots/login.png)
+
+### Karnety
+
+![Karnety](docs/screenshots/memberships.png)
+
+### Harmonogram zajęć i rezerwacje
+
+![Harmonogram zajęć i rezerwacje](docs/screenshots/class-schedule.png)
+
+### Lista użytkowników w panelu administratora
+
+![Lista użytkowników w panelu administratora](docs/screenshots/admin-users.png)
+
+### Szczegóły użytkownika w panelu administratora
+
+![Szczegóły użytkownika w panelu administratora](docs/screenshots/admin-user-details.png)
+
+### Dokumentacja API Swagger
+
+![Dokumentacja API Swagger](docs/screenshots/swagger.png)
+
+### Widok mobilny kodu QR
+
+![Widok mobilny kodu QR](docs/screenshots/qr-mobile.png)
+
+### Mobilny skaner QR administratora
+
+![Mobilny skaner QR administratora](docs/screenshots/admin-scanqr-mobile.png)
 
 ## Wymagania systemowe
 
