@@ -81,6 +81,43 @@ The application follows a client-server architecture:
 - Publishing and hiding announcements
 
 ---
+## Screenshots
+
+### Home / Admin dashboard
+
+![Home / Admin dashboard](docs/screenshots/home.png)
+
+### Login
+
+![Login](docs/screenshots/login.png)
+
+### Memberships
+
+![Memberships](docs/screenshots/memberships.png)
+
+### Class schedule and reservations
+
+![Class schedule and reservations](docs/screenshots/class-schedule.png)
+
+### Administrator users list
+
+![Administrator users list](docs/screenshots/admin-users.png)
+
+### Administrator user details
+
+![Administrator user details](docs/screenshots/admin-user-details.png)
+
+### Swagger API documentation
+
+![Swagger API documentation](docs/screenshots/swagger.png)
+
+### Mobile QR code view
+
+![Mobile QR code view](docs/screenshots/qr-mobile.png)
+
+### Mobile administrator QR scanner
+
+![Mobile administrator QR scanner](docs/screenshots/admin-scanqr-mobile.png)
 
 ## System Requirements
 
