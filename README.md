@@ -21,15 +21,16 @@ The application follows a client-server architecture:
 
 1. [Tech Stack](#tech-stack)
 2. [Features](#features)
-3. [System Requirements](#system-requirements)
-4. [Tool Installation](#tool-installation)
-5. [Running the Database](#running-the-database)
-6. [Running the Application](#running-the-application)
-7. [First Login and Administrator Account](#first-login-and-administrator-account)
-8. [Project Structure](#project-structure)
-9. [API Endpoints](#api-endpoints)
-10. [Troubleshooting](#troubleshooting)
-11. [Author](#author)
+3. [Screenshots](#screenshots)
+4. [System Requirements](#system-requirements)
+5. [Tool Installation](#tool-installation)
+6. [Running the Database](#running-the-database)
+7. [Running the Application](#running-the-application)
+8. [First Login and Administrator Account](#first-login-and-administrator-account)
+9. [Project Structure](#project-structure)
+10. [API Endpoints](#api-endpoints)
+11. [Troubleshooting](#troubleshooting)
+12. [Author](#author)
 
 ---
 
