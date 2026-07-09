@@ -1,4 +1,4 @@
-# GymManager — System zarządzania klubem fitness
+# GymManager - System zarządzania klubem fitness
 
 Aplikacja webowa typu SPA stworzona jako projekt inżynierski w ramach studiów z zakresu inżynierii oprogramowania.
 
