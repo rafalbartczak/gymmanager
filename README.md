@@ -1,5 +1,5 @@
-Polish version: [README_PL.md](README_PL.md)
 # GymManager - Fitness Club Management System
+Polish version: [README_PL.md](README_PL.md)
 
 A single-page web application developed as an engineering thesis project for a Software Engineering degree.
 
