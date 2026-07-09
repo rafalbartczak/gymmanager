@@ -1,0 +1,283 @@
+﻿@inherits LayoutComponentBase
+@using GymManager.Client.Services.Auth
+@using System.Net.Http.Json
+@inject TokenStore Tokens
+@inject AuthApiClient AuthClient
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="gym-app @(isDarkMode ? "dark-mode" : "")">
+    @* === HEADER === *@
+    <header class="gym-header">
+        <div class="header-left">
+            <a href="/" class="brand">Klub fitness</a>
+        </div>
+        <div class="header-right">
+            @if (!string.IsNullOrWhiteSpace(weatherInfo))
+            {
+                <span class="weather-info" title="Pogoda w Twojej okolicy">@weatherInfo</span>
+            }
+            @if (isLoggedIn)
+            {
+                <div class="user-menu">
+                    <div class="user-menu-trigger">
+                        <span>Witaj @userDisplayName!</span>
+                    </div>
+                    <div class="user-dropdown">
+                        <a href="/profile">Profil</a>
+                        <a href="#" @onclick="DoLogout" @onclick:preventDefault>Wyloguj</a>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <span class="user-greeting">niezalogowany</span>
+            }
+            <button class="theme-toggle" @onclick="ToggleDarkMode" title="Przełącz motyw">
+                @(isDarkMode ? "☀️" : "🌙")
+            </button>
+        </div>
+    </header>
+
+    @* === MAIN CONTENT === *@
+    <main class="gym-main">
+        <div class="content-area">
+            @Body
+
+            @if (showBackButton)
+            {
+                <div class="back-button-container">
+                    <button class="btn-back" @onclick="GoBack">Powrót</button>
+                </div>
+            }
+        </div>
+        <div class="biceps-image">
+            <img src="@(isDarkMode ? "images/biceps-dark.png" : "images/biceps-light.png")" alt="Fitness" />
+        </div>
+    </main>
+
+    @* === FOOTER === *@
+    <footer class="gym-footer">
+        <div class="footer-bottom">
+            <div class="social-media">
+                <span>Social media</span>
+                <a href="#" title="Facebook">📘</a>
+                <a href="#" title="LinkedIn">💼</a>
+                <a href="#" title="YouTube">▶️</a>
+                <a href="#" title="Instagram">📷</a>
+            </div>
+            <div class="quote-section">
+                @if (!string.IsNullOrWhiteSpace(randomQuote))
+                {
+                    <p class="quote">
+                        "@randomQuote"
+                        @if (!string.IsNullOrWhiteSpace(quoteAuthor))
+                        {
+                            <span class="quote-author"> — @quoteAuthor</span>
+                        }
+                    </p>
+                }
+            </div>
+            <a href="/" class="home-icon" title="Strona główna">🏠</a>
+        </div>
+    </footer>
+</div>
+
+@code {
+    bool isDarkMode = false;
+    bool isLoggedIn = false;
+    string userDisplayName = "";
+    string? randomQuote;
+    string? quoteAuthor;
+    string? weatherInfo;
+
+    private System.Threading.Timer? quoteTimer;
+
+    bool showBackButton
+    {
+        get
+        {
+            var path = new Uri(Nav.Uri).AbsolutePath.ToLower().TrimEnd('/');
+
+            if (string.IsNullOrEmpty(path) || path == "/" || path == "/login" || path == "/register")
+                return false;
+
+            return true;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckAuthState();
+        LoadRandomQuote();
+        Nav.LocationChanged += OnLocationChanged;
+
+        quoteTimer = new System.Threading.Timer(async _ =>
+        {
+            LoadRandomQuote();
+            await InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var savedTheme = await JS.InvokeAsync<string?>("localStorage.getItem", "gym_theme");
+                if (savedTheme == "dark")
+                {
+                    isDarkMode = true;
+                }
+            }
+            catch { }
+
+            await LoadWeather();
+
+            StateHasChanged();
+        }
+    }
+
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        await CheckAuthState();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CheckAuthState()
+    {
+        try
+        {
+            var token = await Tokens.GetAccessTokenAsync();
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                isLoggedIn = false;
+                userDisplayName = "";
+                return;
+            }
+
+            isLoggedIn = true;
+
+            userDisplayName = JwtHelper.GetEmail(token) ?? "użytkowniku";
+            if (userDisplayName.Contains("@"))
+                userDisplayName = userDisplayName.Split("@")[0];
+        }
+        catch
+        {
+            isLoggedIn = false;
+            userDisplayName = "";
+        }
+    }
+
+    private void LoadRandomQuote()
+    {
+        var quotes = new[]
+        {
+            ("Twoje ciało może znieść prawie wszystko. To umysł musisz przekonać.", ""),
+            ("Sukces to suma małych wysiłków powtarzanych dzień po dniu.", "Robert Collier"),
+            ("Nie chodzi o to, żeby być najlepszym. Chodzi o to, żeby być lepszym niż wczoraj.", ""),
+            ("Najtrudniejszy krok to pierwszy krok przez drzwi siłowni.", ""),
+            ("Twoja jedyna konkurencja to Ty z wczoraj.", ""),
+            ("Silne ciało buduje silny umysł.", ""),
+            ("Każdy trening przybliża Cię do celu.", ""),
+            ("Dyscyplina to most między celami a osiągnięciami.", "Jim Rohn"),
+            ("Nie licz dni, spraw by dni się liczyły.", "Muhammad Ali"),
+            ("Energia i wytrwałość zdobywają wszystko.", "Benjamin Franklin"),
+            ("Zacznij tam, gdzie jesteś. Użyj tego, co masz. Zrób, co możesz.", "Arthur Ashe"),
+            ("Jedyny zły trening to ten, który się nie odbył.", ""),
+            ("Siła nie pochodzi z wygranej. Zmagania rozwijają twoją siłę.", "Arnold Schwarzenegger"),
+            ("Ciało osiąga to, w co umysł wierzy.", ""),
+            ("Postęp, nie perfekcja.", ""),
+            ("Ból, który czujesz dzisiaj, będzie siłą, którą poczujesz jutro.", ""),
+            ("Wyniki przychodzą z czasem, nie z dnia na dzień. Pracuj ciężko i bądź cierpliwy.", ""),
+            ("Dbaj o swoje ciało. To jedyne miejsce, w którym musisz żyć.", "Jim Rohn"),
+            ("Motywacja sprawia, że zaczynasz. Nawyk sprawia, że kontynuujesz.", ""),
+            ("Nie ma windy do sukcesu. Musisz iść po schodach.", "Zig Ziglar")
+        };
+
+        var (quote, author) = quotes[new Random().Next(quotes.Length)];
+        randomQuote = quote;
+        quoteAuthor = author;
+    }
+
+    private async Task LoadWeather()
+    {
+        try
+        {
+            var lat = 52.23;
+            var lon = 21.01;
+
+            var response = await JS.InvokeAsync<System.Text.Json.JsonElement?>("fetchWeather", lat, lon);
+
+            if (response.HasValue && response.Value.TryGetProperty("current", out var current))
+            {
+                var temp = current.GetProperty("temperature_2m").GetDouble();
+                var weatherCode = current.GetProperty("weather_code").GetInt32();
+                var emoji = GetWeatherEmoji(weatherCode);
+                weatherInfo = $"{emoji} {temp:F0}°C";
+            }
+        }
+        catch
+        {
+            weatherInfo = null;
+        }
+    }
+
+    private string GetWeatherEmoji(int code)
+    {
+        return code switch
+        {
+            0 => "☀️",
+            1 or 2 or 3 => "⛅",
+            45 or 48 => "🌫️",
+            51 or 53 or 55 => "🌧️",
+            61 or 63 or 65 => "🌧️",
+            71 or 73 or 75 => "🌨️",
+            77 => "🌨️",
+            80 or 81 or 82 => "🌧️",
+            85 or 86 => "🌨️",
+            95 => "⛈️",
+            96 or 99 => "⛈️",
+            _ => "🌡️"
+        };
+    }
+
+    private async Task ToggleDarkMode()
+    {
+        isDarkMode = !isDarkMode;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", "gym_theme", isDarkMode ? "dark" : "light");
+        }
+        catch { }
+    }
+
+    private async Task DoLogout()
+    {
+        try
+        {
+            var refresh = await Tokens.GetRefreshTokenAsync();
+            if (!string.IsNullOrWhiteSpace(refresh))
+                await AuthClient.LogoutAsync(refresh);
+        }
+        catch { }
+
+        await Tokens.ClearAsync();
+        isLoggedIn = false;
+        userDisplayName = "";
+        Nav.NavigateTo("/login", forceLoad: true);
+    }
+
+    private void GoBack()
+    {
+        Nav.NavigateTo("/");
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        quoteTimer?.Dispose();
+    }
+}

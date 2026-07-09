@@ -1,0 +1,45 @@
+﻿@page "/announcements"
+<PageTitle>Powiadomienia</PageTitle>
+
+@inject NavigationManager Nav
+@inject GymManager.Client.Services.ApiHttpClient Api
+@using System.Net.Http.Json
+@using GymManager.Client.Contracts
+
+<h3 class="page-title">Powiadomienia</h3>
+
+@if (items is null)
+{
+	<p>Ładowanie...</p>
+}
+else if (items.Count == 0)
+{
+	<p>Brak ogłoszeń.</p>
+}
+else
+{
+	@foreach (var a in items)
+	{
+		<div class="gym-card">
+			<h4 style="margin-top:0;">@a.Title</h4>
+			<p>@a.Content</p>
+			<small class="announcement-date">@a.PublishedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</small>
+		</div>
+	}
+}
+
+@code {
+	List<AnnouncementListItem>? items;
+
+	protected override async Task OnInitializedAsync()
+	{
+		try
+		{
+			items = await Api.Http.GetFromJsonAsync<List<AnnouncementListItem>>("announcements");
+		}
+		catch
+		{
+			Nav.NavigateTo("/login");
+		}
+	}
+}

@@ -1,0 +1,203 @@
+﻿@page "/admin/announcements"
+<PageTitle>Zarządzanie ogłoszeniami</PageTitle>
+
+@using System.Net.Http.Json
+@using GymManager.Client.Contracts
+@using GymManager.Client.Services
+@using GymManager.Client.Services.Auth
+@inject ApiHttpClient Api
+@inject TokenStore Tokens
+@inject NavigationManager Nav
+
+<h3 class="page-title">Zarządzanie ogłoszeniami</h3>
+
+@if (!isAdminChecked)
+{
+    <p>Sprawdzanie uprawnień...</p>
+}
+else if (!isAdmin)
+{
+    <div class="alert-error">Brak uprawnień.</div>
+}
+else
+{
+    <!-- DODAJ OGŁOSZENIE -->
+    <div class="gym-card">
+        <h4 style="margin-top:0;">Dodaj ogłoszenie</h4>
+
+        <div class="gym-form">
+            <div class="form-group">
+                <label>Tytuł</label>
+                <input type="text" @bind="newTitle" placeholder="Tytuł ogłoszenia (max 200 znaków)" />
+            </div>
+            <div class="form-group">
+                <label>Treść</label>
+                <textarea style="width:100%; padding:12px; border-radius:8px; border:2px solid #ccc; min-height:120px;" @bind="newContent" placeholder="Treść ogłoszenia"></textarea>
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="newPublished" @bind="newPublished" />
+                <label for="newPublished">Opublikowane (widoczne dla użytkowników)</label>
+            </div>
+            <button class="btn-primary-gym" style="width:100%;" @onclick="Create">
+                Dodaj ogłoszenie
+            </button>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(createError))
+        {
+            <div class="alert-error" style="margin-top:15px;">@createError</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(createSuccess))
+        {
+            <div class="alert-success" style="margin-top:15px;">@createSuccess</div>
+        }
+    </div>
+
+    <!-- LISTA OGŁOSZEŃ -->
+    <div class="gym-card">
+        <h4 style="margin-top:0;">Lista ogłoszeń</h4>
+
+        @if (items is null)
+        {
+            <p>Ładowanie...</p>
+        }
+        else if (items.Count == 0)
+        {
+            <p>Brak ogłoszeń.</p>
+        }
+        else
+        {
+            @foreach (var a in items)
+            {
+                <div style="padding:15px; margin:10px 0; border:1px solid rgba(0,0,0,0.1); border-radius:8px;">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+                        <div>
+                            <strong>@a.Title</strong>
+                            <span class="@(a.IsPublished ? "status-active" : "status-inactive")" style="margin-left:10px;">
+                                @(a.IsPublished ? "Opublikowane" : "Ukryte")
+                            </span>
+                        </div>
+                        <small style="opacity:0.7;">@a.PublishedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</small>
+                    </div>
+                    <p style="margin:10px 0; opacity:0.9;">@a.Content</p>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <button class="btn-secondary-gym" style="padding:8px 16px; min-width:auto;" @onclick="() => TogglePublish(a.AnnouncementId, a.IsPublished)">
+                            @(a.IsPublished ? "Ukryj" : "Opublikuj")
+                        </button>
+                        <button class="btn-secondary-gym" style="padding:8px 16px; min-width:auto; border-color:#dc3545; color:#dc3545;" @onclick="() => Delete(a.AnnouncementId)">
+                            Usuń
+                        </button>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+}
+
+@code {
+    List<AnnouncementListItem>? items;
+
+    bool isAdminChecked = false;
+    bool isAdmin = false;
+
+    string newTitle = "";
+    string newContent = "";
+    bool newPublished = true;
+    string? createError;
+    string? createSuccess;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var access = await Tokens.GetAccessTokenAsync();
+        if (string.IsNullOrWhiteSpace(access))
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        var role = JwtHelper.GetRole(access);
+        isAdmin = string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase);
+        isAdminChecked = true;
+
+        if (!isAdmin) return;
+
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        try
+        {
+            items = await Api.Http.GetFromJsonAsync<List<AnnouncementListItem>>("announcements/admin");
+        }
+        catch
+        {
+            Nav.NavigateTo("/login");
+        }
+    }
+
+    private async Task Create()
+    {
+        createError = null;
+        createSuccess = null;
+
+        if (string.IsNullOrWhiteSpace(newTitle))
+        {
+            createError = "Podaj tytuł ogłoszenia.";
+            return;
+        }
+
+        try
+        {
+            var body = new
+            {
+                Title = newTitle,
+                Content = newContent,
+                IsPublished = newPublished
+            };
+
+            var res = await Api.Http.PostAsJsonAsync("announcements", body);
+
+            if (!res.IsSuccessStatusCode)
+            {
+                createError = "Nie udało się dodać ogłoszenia.";
+                return;
+            }
+
+            createSuccess = "Dodano ogłoszenie!";
+            newTitle = "";
+            newContent = "";
+            newPublished = true;
+
+            await Load();
+        }
+        catch
+        {
+            createError = "Błąd połączenia.";
+        }
+    }
+
+    private async Task TogglePublish(Guid id, bool isPublishedNow)
+    {
+        var target = !isPublishedNow;
+
+        try
+        {
+            var res = await Api.Http.PatchAsync($"announcements/{id}/publish?published={target.ToString().ToLower()}", null);
+            if (!res.IsSuccessStatusCode) return;
+            await Load();
+        }
+        catch { }
+    }
+
+    private async Task Delete(Guid id)
+    {
+        try
+        {
+            var res = await Api.Http.DeleteAsync($"announcements/{id}");
+            if (!res.IsSuccessStatusCode) return;
+            await Load();
+        }
+        catch { }
+    }
+}

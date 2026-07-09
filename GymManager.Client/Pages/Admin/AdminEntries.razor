@@ -1,0 +1,170 @@
+﻿@page "/admin/entries"
+<PageTitle>Historia wejść (Admin)</PageTitle>
+
+@using System.Net.Http.Json
+@using GymManager.Client.Services
+@using GymManager.Client.Services.Auth
+@inject ApiHttpClient Api
+@inject TokenStore Tokens
+@inject NavigationManager Nav
+
+<h3 class="page-title">Historia wejść</h3>
+
+@if (!isAdminChecked)
+{
+    <p>Sprawdzanie uprawnień...</p>
+}
+else if (!isAdmin)
+{
+    <div class="alert-error">Brak uprawnień.</div>
+}
+else
+{
+    <!-- FILTR DAT -->
+    <div class="gym-card" style="margin-bottom:20px;">
+        <h4 style="margin-top:0;">Filtruj według daty</h4>
+        <div style="display:flex; gap:15px; flex-wrap:wrap; align-items:flex-end;">
+            <div class="form-group" style="margin-bottom:0;">
+                <label>Od</label>
+                <input type="date" style="padding:10px; border-radius:8px; border:2px solid #ccc;" @bind="dateFrom" />
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+                <label>Do</label>
+                <input type="date" style="padding:10px; border-radius:8px; border:2px solid #ccc;" @bind="dateTo" />
+            </div>
+            <button class="btn-primary-gym" style="min-width:120px;" disabled="@isLoading" @onclick="LoadEntries">
+                Filtruj
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="alert-error">@error</div>
+    }
+
+    @if (isLoading)
+    {
+        <p>Ładowanie...</p>
+    }
+    else if (entries is null || entries.Count == 0)
+    {
+        <p>Brak wejść w wybranym okresie.</p>
+    }
+    else
+    {
+        <div class="gym-card" style="overflow-x:auto;">
+            <table class="gym-table">
+                <thead>
+                    <tr>
+                        <th>Data i godzina</th>
+                        <th>Email</th>
+                        <th>Sposób wejścia</th>
+                        <th>Karnet</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var e in entries)
+                    {
+                        <tr>
+                            <td>@e.EntryAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                            <td>@e.UserEmail</td>
+                            <td>@FormatEntryMethod(e.EntryMethod)</td>
+                            <td>@(e.PassTypeName ?? "-")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        @if (entries.Count >= 100)
+        {
+            <p style="opacity:0.7; font-size:0.9em; margin-top:15px;">Wyświetlono ostatnie 100 wejść.</p>
+        }
+    }
+}
+
+@code {
+    bool isAdminChecked = false;
+    bool isAdmin = false;
+    List<EntryDto>? entries;
+    bool isLoading = true;
+    string? error;
+
+    DateTime dateFrom = DateTime.Today.AddDays(-7);
+    DateTime dateTo = DateTime.Today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var access = await Tokens.GetAccessTokenAsync();
+        if (string.IsNullOrWhiteSpace(access))
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        var role = JwtHelper.GetRole(access);
+        isAdmin = string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase);
+        isAdminChecked = true;
+
+        if (!isAdmin) return;
+
+        await LoadEntries();
+    }
+
+    private async Task LoadEntries()
+    {
+        isLoading = true;
+        error = null;
+
+        try
+        {
+            var fromStr = dateFrom.ToString("yyyy-MM-dd");
+            var toStr = dateTo.AddDays(1).ToString("yyyy-MM-dd"); // +1 dzień żeby włączyć cały dzień "do"
+            entries = await Api.Http.GetFromJsonAsync<List<EntryDto>>($"entries?from={fromStr}&to={toStr}&limit=100");
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Endpoint nie istnieje - spróbuj bez filtrów
+            try
+            {
+                entries = await Api.Http.GetFromJsonAsync<List<EntryDto>>("entries?limit=100");
+            }
+            catch
+            {
+                entries = new();
+            }
+        }
+        catch
+        {
+            error = "Nie udało się pobrać historii wejść.";
+            entries = new();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private string FormatEntryMethod(string method)
+    {
+        return method switch
+        {
+            "qr_scan" => "Skan QR (samoobsługa)",
+            "admin_scan" => "Skan QR (recepcja)",
+            "manual" => "Rejestracja ręczna",
+            _ => method
+        };
+    }
+
+    public class EntryDto
+    {
+        public Guid EntryId { get; set; }
+        public Guid UserId { get; set; }
+        public string UserEmail { get; set; } = default!;
+        public string EntryMethod { get; set; } = default!;
+        public Guid? PassId { get; set; }
+        public string? PassTypeName { get; set; }
+        public DateTime EntryAt { get; set; }
+    }
+}

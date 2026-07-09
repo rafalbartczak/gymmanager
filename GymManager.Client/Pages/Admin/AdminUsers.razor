@@ -1,0 +1,149 @@
+﻿@page "/admin/users"
+<PageTitle>Lista użytkowników</PageTitle>
+
+@using System.Net.Http.Json
+@using GymManager.Client.Contracts
+@using GymManager.Client.Services
+@using GymManager.Client.Services.Auth
+@inject ApiHttpClient Api
+@inject TokenStore Tokens
+@inject NavigationManager Nav
+
+<h3 class="page-title">Lista użytkowników</h3>
+
+@if (!isAdminChecked)
+{
+    <p>Sprawdzanie uprawnień...</p>
+}
+else if (!isAdmin)
+{
+    <div class="alert-error">Brak uprawnień.</div>
+}
+else
+{
+    @if (allUsers is null)
+    {
+        <p>Ładowanie...</p>
+    }
+    else if (allUsers.Count == 0)
+    {
+        <p>Brak użytkowników.</p>
+    }
+    else
+    {
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:15px;">
+            <span style="opacity:0.7;">Łącznie: @filteredUsers.Count użytkowników</span>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" @bind="showDeleted" />
+                <span>Pokaż usunięte konta (@deletedCount)</span>
+                <div style="margin-bottom:15px;">
+	                <input type="text" class="form-control" placeholder="Szukaj po e-mail, imieniu lub nazwisku..."
+	                       @bind="searchQuery" @bind:event="oninput"
+	                       style="max-width:400px;" />
+                </div>
+            </label>
+        </div>
+
+        <div class="gym-card" style="overflow-x:auto;">
+            <table class="gym-table">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>Imię</th>
+                        <th>Nazwisko</th>
+                        <th>Rola</th>
+                        <th>Status</th>
+                        <th>Data rejestracji</th>
+                        <th>Akcje</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var u in filteredUsers)
+                    {
+                        <tr style="@(u.IsDeleted ? "opacity:0.5;" : "")">
+                            <td>@u.Email</td>
+                            <td>@u.FirstName</td>
+                            <td>@u.LastName</td>
+                            <td>@u.Role</td>
+                            <td>
+                                @if (u.IsDeleted)
+                                {
+                                    <span class="status-inactive">Usunięty</span>
+                                }
+                                else
+                                {
+                                    <span class="@(u.IsActive ? "status-active" : "status-inactive")">
+                                        @(u.IsActive ? "Aktywny" : "Zablokowany")
+                                    </span>
+                                }
+                            </td>
+                            <td>@u.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd")</td>
+                            <td>
+                                <a href="/admin/users/@u.UserId" class="btn-secondary-gym" style="padding:8px 16px; min-width:auto; font-size:0.9rem;">
+                                    Szczegóły
+                                </a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+}
+
+@code {
+	string searchQuery = "";
+    bool isAdminChecked = false;
+    bool isAdmin = false;
+    bool showDeleted = false;
+
+    List<UserListItem>? allUsers;
+
+    List<UserListItem> filteredUsers =>
+	    allUsers?.Where(u => (showDeleted || !u.IsDeleted)
+	                         && (string.IsNullOrWhiteSpace(searchQuery)
+	                             || u.Email.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)
+	                             || u.FirstName.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)
+	                             || u.LastName.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)))
+		    .ToList() ?? new();
+
+    int deletedCount =>
+        allUsers?.Count(u => u.IsDeleted) ?? 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var access = await Tokens.GetAccessTokenAsync();
+        if (string.IsNullOrWhiteSpace(access))
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        var role = JwtHelper.GetRole(access);
+        isAdmin = string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase);
+        isAdminChecked = true;
+
+        if (!isAdmin) return;
+
+        try
+        {
+            allUsers = await Api.Http.GetFromJsonAsync<List<UserListItem>>("admin/users");
+        }
+        catch
+        {
+            Nav.NavigateTo("/login");
+        }
+    }
+
+    public class UserListItem
+    {
+        public Guid UserId { get; set; }
+        public string Email { get; set; } = default!;
+        public string FirstName { get; set; } = default!;
+        public string LastName { get; set; } = default!;
+        public string Role { get; set; } = default!;
+        public bool IsActive { get; set; }
+        public bool IsDeleted { get; set; }
+        public DateTime CreatedAt { get; set; }
+    }
+}

@@ -1,0 +1,430 @@
+﻿@page "/admin/users/{UserId:guid}"
+<PageTitle>Szczegóły użytkownika</PageTitle>
+
+@using System.Net.Http.Json
+@using GymManager.Client.Contracts
+@using GymManager.Client.Services
+@using GymManager.Client.Services.Auth
+@inject ApiHttpClient Api
+@inject TokenStore Tokens
+@inject NavigationManager Nav
+
+<h3 class="page-title">Szczegóły użytkownika</h3>
+
+@if (!isAdminChecked)
+{
+    <p>Sprawdzanie uprawnień...</p>
+}
+else if (!isAdmin)
+{
+    <div class="alert-error">Brak uprawnień.</div>
+}
+else if (dto is null)
+{
+    <p>Ładowanie...</p>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(passMsg))
+    {
+        <div class="alert-success">@passMsg</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(passErr))
+    {
+        <div class="alert-error">@passErr</div>
+    }
+
+    <div class="user-details-grid">
+        <!-- DANE UŻYTKOWNIKA -->
+        <div class="gym-card user-detail-card">
+            <h4 style="margin-top:0;">Dane użytkownika</h4>
+            <div class="detail-row"><span class="label">Imię:</span> @dto.FirstName</div>
+            <div class="detail-row"><span class="label">Nazwisko:</span> @dto.LastName</div>
+            <div class="detail-row"><span class="label">Email:</span> @dto.Email</div>
+            <div class="detail-row"><span class="label">Rola:</span> @dto.Role</div>
+            <div class="detail-row">
+                <span class="label">Status:</span>
+                <span class="@(dto.IsActive ? "status-active" : "status-inactive")">
+                    @(dto.IsActive ? "Aktywny" : "Zablokowany")
+                </span>
+            </div>
+            <div class="detail-row"><span class="label">Utworzono:</span> @dto.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</div>
+        </div>
+
+        <!-- AKTYWNY KARNET -->
+        <div class="gym-card user-detail-card">
+            <h4 style="margin-top:0;">Aktywny karnet</h4>
+            @if (dto.ActivePass is null)
+            {
+                <p style="opacity:0.7;">Brak aktywnego karnetu.</p>
+            }
+            else
+            {
+                <div class="detail-row"><span class="label">Typ:</span> <strong>@dto.ActivePass.PassTypeName</strong></div>
+                <div class="detail-row"><span class="label">Okres:</span> @dto.ActivePass.StartAt.ToLocalTime().ToString("yyyy-MM-dd") — @dto.ActivePass.EndAt.ToLocalTime().ToString("yyyy-MM-dd")</div>
+                <div class="detail-row">
+                    <span class="label">Status:</span>
+                    <span class="@(dto.ActivePass.Status == "active" ? "status-active" : "status-inactive")">
+                        @FormatPassStatus(dto.ActivePass.Status)
+                    </span>
+                </div>
+            }
+        </div>
+
+        <!-- AKCJE KARNETÓW -->
+        <div class="gym-card user-detail-card">
+            <h4 style="margin-top:0;">Zarządzanie karnetem</h4>
+            @if (passTypes is null || passTypes.Count == 0)
+            {
+                <p style="opacity:0.7;">Brak typów karnetów.</p>
+            }
+            else
+            {
+                <div class="gym-form">
+                    <div class="form-group">
+                        <label>Typ karnetu</label>
+                        <select style="width:100%; padding:10px; border-radius:8px; border:2px solid #ccc;" @bind="selectedPassTypeId">
+                            @foreach (var t in passTypes)
+                            {
+                                <option value="@t.PassTypeId">@t.Name (@t.DurationDays dni)</option>
+                            }
+                        </select>
+                    </div>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <button class="btn-primary-gym" style="flex:1; min-width:140px;" disabled="@passBusy" @onclick="AssignPass">
+                            Przypisz
+                        </button>
+                        <button class="btn-secondary-gym" style="flex:1; min-width:140px;" disabled="@passBusy" @onclick="CancelActivePass">
+                            Unieważnij
+                        </button>
+                    </div>
+
+                    <hr style="margin:15px 0; border-color:#ddd;" />
+                    <h4 style="margin-top:0;">Rejestracja wejścia</h4>
+                    <button class="btn-primary-gym" style="width:100%;" disabled="@entryBusy" @onclick="RegisterManualEntry">
+                        📋 Zarejestruj wejście ręcznie
+                    </button>
+                    @if (!string.IsNullOrWhiteSpace(entryMsg))
+                    {
+                        <div class="alert-success" style="margin-top:10px;">@entryMsg</div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(entryErr))
+                    {
+                        <div class="alert-error" style="margin-top:10px;">@entryErr</div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- REZERWACJE -->
+    <div class="gym-card" style="margin-top:20px;">
+        <h4 style="margin-top:0;">Ostatnie rezerwacje zajęć</h4>
+
+        @if (dto.RecentReservations.Count == 0)
+        {
+            <p style="opacity:0.7;">Brak rezerwacji.</p>
+        }
+        else
+        {
+            <div style="overflow-x:auto;">
+                <table class="gym-table">
+                    <thead>
+                        <tr>
+                            <th>Zajęcia</th>
+                            <th>Termin</th>
+                            <th>Status</th>
+                            <th>Utworzono</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in dto.RecentReservations)
+                        {
+                            <tr>
+                                <td>@r.ClassTypeName</td>
+                                <td>@r.StartAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm") — @r.EndAt.ToLocalTime().ToString("HH:mm")</td>
+                                <td>
+                                    <span class="@(r.Status == "reserved" ? "status-active" : "status-inactive")">
+                                        @FormatReservationStatus(r.Status)
+                                    </span>
+                                </td>
+                                <td>@r.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+
+    <!-- HISTORIA WEJŚĆ -->
+    <div class="gym-card" style="margin-top:20px;">
+        <h4 style="margin-top:0;">Historia wejść</h4>
+
+        @if (userEntries is null)
+        {
+            <p>Ładowanie...</p>
+        }
+        else if (userEntries.Count == 0)
+        {
+            <p style="opacity:0.7;">Brak zarejestrowanych wejść.</p>
+        }
+        else
+        {
+            <div style="overflow-x:auto;">
+                <table class="gym-table">
+                    <thead>
+                        <tr>
+                            <th>Data i godzina</th>
+                            <th>Sposób wejścia</th>
+                            <th>Karnet</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var e in userEntries)
+                        {
+                            <tr>
+                                <td>@e.EntryAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>@FormatEntryMethod(e.EntryMethod)</td>
+                                <td>@(e.PassTypeName ?? "-")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (userEntries.Count >= 20)
+            {
+                <p style="opacity:0.7; font-size:0.9em; margin-top:10px;">Wyświetlono ostatnie 20 wejść.</p>
+            }
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public Guid UserId { get; set; }
+
+    bool isAdminChecked = false;
+    bool isAdmin = false;
+
+    AdminUserDetailsDto? dto;
+    List<EntryDto>? userEntries;
+
+    List<PassTypeListItem>? passTypes;
+    Guid selectedPassTypeId;
+    string? passMsg;
+    string? passErr;
+    bool passBusy = false;
+
+    string? entryMsg;
+    string? entryErr;
+    bool entryBusy = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var access = await Tokens.GetAccessTokenAsync();
+        if (string.IsNullOrWhiteSpace(access))
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        var role = JwtHelper.GetRole(access);
+        isAdmin = string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase);
+        isAdminChecked = true;
+
+        if (!isAdmin) return;
+
+        await Load();
+        await LoadPassTypes();
+        await LoadUserEntries();
+
+        if (passTypes is not null && passTypes.Count > 0)
+            selectedPassTypeId = passTypes[0].PassTypeId;
+    }
+
+    private async Task Load()
+    {
+        try
+        {
+            dto = await Api.Http.GetFromJsonAsync<AdminUserDetailsDto>($"admin/users/{UserId}");
+        }
+        catch
+        {
+            Nav.NavigateTo("/login");
+        }
+    }
+
+    private async Task LoadPassTypes()
+    {
+        try
+        {
+            passTypes = await Api.Http.GetFromJsonAsync<List<PassTypeListItem>>("passtypes");
+        }
+        catch
+        {
+            passTypes = new();
+        }
+    }
+
+    private async Task LoadUserEntries()
+    {
+        try
+        {
+            userEntries = await Api.Http.GetFromJsonAsync<List<EntryDto>>($"entries?userId={UserId}&limit=20");
+        }
+        catch
+        {
+            userEntries = new();
+        }
+    }
+
+    private async Task AssignPass()
+    {
+        if (passBusy) return;
+        passBusy = true;
+        passMsg = null;
+        passErr = null;
+
+        try
+        {
+            var req = new AdminAssignPassRequest(UserId, selectedPassTypeId);
+            var res = await Api.Http.PostAsJsonAsync("admin/passes/assign", req);
+
+            if (!res.IsSuccessStatusCode)
+            {
+                var body = await res.Content.ReadAsStringAsync();
+                passErr = !string.IsNullOrWhiteSpace(body) ? body : "Nie udało się przypisać karnetu.";
+                return;
+            }
+
+            passMsg = "Karnet przypisany!";
+            await Load();
+        }
+        catch
+        {
+            passErr = "Błąd połączenia.";
+        }
+        finally
+        {
+            passBusy = false;
+        }
+    }
+
+    private async Task CancelActivePass()
+    {
+        if (passBusy) return;
+        passBusy = true;
+        passMsg = null;
+        passErr = null;
+
+        try
+        {
+            if (dto?.ActivePass is null)
+            {
+                passErr = "Brak aktywnego karnetu do unieważnienia.";
+                return;
+            }
+
+            var req = new AdminCancelPassRequest(dto.ActivePass.PassId);
+            var res = await Api.Http.PostAsJsonAsync("admin/passes/cancel", req);
+
+            if (!res.IsSuccessStatusCode)
+            {
+                passErr = "Nie udało się unieważnić karnetu.";
+                return;
+            }
+
+            passMsg = "Karnet unieważniony.";
+            await Load();
+        }
+        catch
+        {
+            passErr = "Błąd połączenia.";
+        }
+        finally
+        {
+            passBusy = false;
+        }
+    }
+
+    private async Task RegisterManualEntry()
+    {
+        if (entryBusy) return;
+        entryBusy = true;
+        entryMsg = null;
+        entryErr = null;
+
+        try
+        {
+            var req = new { UserId = UserId };
+            var res = await Api.Http.PostAsJsonAsync("entries/manual", req);
+
+            if (!res.IsSuccessStatusCode)
+            {
+                var body = await res.Content.ReadAsStringAsync();
+                try
+                {
+                    var err = System.Text.Json.JsonSerializer.Deserialize<ErrorResponse>(body,
+                        new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    entryErr = err?.Message ?? "Nie udało się zarejestrować wejścia.";
+                }
+                catch
+                {
+                    entryErr = !string.IsNullOrWhiteSpace(body) ? body : "Nie udało się zarejestrować wejścia.";
+                }
+                return;
+            }
+
+            entryMsg = "Wejście zarejestrowane!";
+            await LoadUserEntries();
+            StateHasChanged();
+        }
+        catch
+        {
+            entryErr = "Błąd połączenia.";
+        }
+        finally
+        {
+            entryBusy = false;
+        }
+    }
+
+    private string FormatReservationStatus(string status) => status switch
+    {
+        "reserved" => "Zarezerwowane",
+        "canceled" => "Anulowane",
+        "attended" => "Obecny",
+        "no_show" => "Nieobecny",
+        _ => status
+    };
+
+    private string FormatPassStatus(string status) => status switch
+    {
+        "active" => "Aktywny",
+        "expired" => "Wygasły",
+        "canceled" => "Anulowany",
+        _ => status
+    };
+
+    private string FormatEntryMethod(string method) => method switch
+    {
+        "qr_scan" => "Skan QR (samoobsługa)",
+        "admin_scan" => "Skan QR (recepcja)",
+        "manual" => "Rejestracja ręczna",
+        _ => method
+    };
+
+    public class ErrorResponse
+    {
+        public string? Error { get; set; }
+        public string? Message { get; set; }
+    }
+
+    public class EntryDto
+    {
+        public Guid EntryId { get; set; }
+        public string EntryMethod { get; set; } = default!;
+        public string? PassTypeName { get; set; }
+        public DateTime EntryAt { get; set; }
+    }
+}

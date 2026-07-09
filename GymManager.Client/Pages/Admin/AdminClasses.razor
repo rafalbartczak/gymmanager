@@ -1,0 +1,570 @@
+﻿@page "/admin/classes"
+<PageTitle>Zarządzanie zajęciami</PageTitle>
+
+@using System.Net.Http.Json
+@using GymManager.Client.Contracts
+@using GymManager.Client.Services
+@using GymManager.Client.Services.Auth
+@inject ApiHttpClient Api
+@inject TokenStore Tokens
+@inject NavigationManager Nav
+
+<h3 class="page-title">Zarządzanie zajęciami</h3>
+
+@if (!isAdminChecked)
+{
+    <p>Sprawdzanie uprawnień...</p>
+}
+else if (!isAdmin)
+{
+    <div class="alert-error">Brak uprawnień.</div>
+}
+else
+{
+    <div style="display:flex; gap:20px; flex-wrap:wrap; margin-bottom:20px;">
+
+        <!-- TYPY ZAJĘĆ -->
+        <div class="gym-card" style="flex:1; min-width:300px;">
+            <h4 style="margin-top:0;">Dodaj typ zajęć</h4>
+
+            <div class="gym-form">
+                <div class="form-group">
+                    <label>Nazwa</label>
+                    <input type="text" @bind="typeName" placeholder="np. Yoga" />
+                </div>
+                <div class="form-group">
+                    <label>Opis</label>
+                    <textarea style="width:100%; padding:10px; border-radius:8px; border:2px solid #ccc;" rows="3" @bind="typeDesc" placeholder="Opcjonalny opis"></textarea>
+                </div>
+                <button class="btn-primary-gym" style="width:100%;" disabled="@busy" @onclick="CreateType">
+                    Dodaj typ
+                </button>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(typeMsg))
+            {
+                <div class="alert-success" style="margin-top:15px;">@typeMsg</div>
+            }
+            @if (!string.IsNullOrWhiteSpace(typeErr))
+            {
+                <div class="alert-error" style="margin-top:15px;">@typeErr</div>
+            }
+
+            @if (types is not null && types.Count > 0)
+            {
+                <h5 style="margin-top:20px;">Istniejące typy:</h5>
+                @foreach (var t in types)
+                {
+                    <div style="padding:8px 12px; border-bottom:1px solid rgba(0,0,0,0.1); display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <strong>@t.Name</strong>
+                            @if (!t.IsActive)
+                            {
+                                <span class="status-inactive" style="margin-left:10px;">(nieaktywny)</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(t.Description))
+                            {
+                                <div style="font-size:0.85em; opacity:0.7;">@t.Description</div>
+                            }
+                        </div>
+                        <button class="btn-secondary-gym" style="padding:4px 12px; min-width:auto; border-color:#dc3545; color:#dc3545; font-size:0.85em;"
+                                disabled="@busy" @onclick="() => DeleteType(t.ClassTypeId, t.Name)">
+                            Usuń
+                        </button>
+                    </div>
+                }
+            }
+        </div>
+
+        <!-- DODAJ SESJĘ -->
+        <div class="gym-card" style="flex:1; min-width:300px;">
+            <h4 style="margin-top:0;">Dodaj sesję</h4>
+
+            @if (types is null || types.Count == 0)
+            {
+                <p>Najpierw dodaj typ zajęć.</p>
+            }
+            else
+            {
+                <div class="gym-form">
+                    <div class="form-group">
+                        <label>Typ zajęć</label>
+                        <select style="width:100%; padding:12px; border-radius:8px; border:2px solid #ccc;" @bind="sessionTypeId">
+                            @foreach (var t in types.Where(x => x.IsActive))
+                            {
+                                <option value="@t.ClassTypeId">@t.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Start</label>
+                        <input type="datetime-local" style="width:100%; padding:12px; border-radius:8px; border:2px solid #ccc;" @bind="startLocal" />
+                    </div>
+                    <div class="form-group">
+                        <label>Koniec</label>
+                        <input type="datetime-local" style="width:100%; padding:12px; border-radius:8px; border:2px solid #ccc;" @bind="endLocal" />
+                    </div>
+                    <div class="form-group">
+                        <label>Pojemność</label>
+                        <input type="number" @bind="capacity" min="1" max="200" />
+                    </div>
+                    <button class="btn-primary-gym" style="width:100%;" disabled="@busy" @onclick="CreateSession">
+                        Dodaj sesję
+                    </button>
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(sessionMsg))
+                {
+                    <div class="alert-success" style="margin-top:15px;">@sessionMsg</div>
+                }
+                @if (!string.IsNullOrWhiteSpace(sessionErr))
+                {
+                    <div class="alert-error" style="margin-top:15px;">@sessionErr</div>
+                }
+            }
+        </div>
+    </div>
+
+    <!-- LISTA SESJI -->
+    <div class="gym-card">
+        <h4 style="margin-top:0;">Sesje w grafiku</h4>
+
+        @if (schedule is null)
+        {
+            <p>Ładowanie...</p>
+        }
+        else if (schedule.Count == 0)
+        {
+            <p>Brak sesji.</p>
+        }
+        else
+        {
+            @foreach (var s in schedule)
+            {
+                var isPast = s.EndAt.ToLocalTime() < DateTime.Now;
+                <div style="padding:15px; margin:10px 0; border:1px solid rgba(0,0,0,0.1); border-radius:8px; @(isPast ? "opacity:0.5;" : "")">
+                    <strong>@s.ClassTypeName</strong>
+                    @if (isPast)
+                    {
+                        <span class="status-inactive" style="margin-left:10px;">(minione)</span>
+                    }
+                    <div style="margin:5px 0;">
+                        📅 @s.StartAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm") — @s.EndAt.ToLocalTime().ToString("HH:mm")
+                    </div>
+                    <div style="margin:5px 0;">
+                        👥 @s.ReservedCount / @s.Capacity
+                    </div>
+                    @if (s.IsCanceled)
+                    {
+                        <span class="status-inactive">Odwołane</span>
+                    }
+                    <div style="margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;">
+                        <button class="btn-secondary-gym" style="padding:8px 16px; min-width:auto;" disabled="@busy" @onclick="() => LoadAttendance(s.ClassSessionId)">
+                            Lista
+                        </button>
+                        @if (!isPast)
+                        {
+                            <button class="btn-secondary-gym" style="padding:8px 16px; min-width:auto;" disabled="@busy" @onclick="() => ToggleCancel(s.ClassSessionId, !s.IsCanceled)">
+                                @(s.IsCanceled ? "Przywróć" : "Odwołaj")
+                            </button>
+                        }
+                        <button class="btn-secondary-gym" style="padding:8px 16px; min-width:auto; border-color:#dc3545; color:#dc3545;" disabled="@busy" @onclick="() => AskDeleteSession(s.ClassSessionId, s.ClassTypeName, s.StartAt)">
+                            Usuń
+                        </button>
+                    </div>
+                </div>
+            }
+        }
+
+        @if (attendance is not null)
+        {
+            <h5 style="margin-top:20px;">Lista zapisanych:</h5>
+            @if (attendance.Count == 0)
+            {
+                <p>Brak zapisów.</p>
+            }
+            else
+            {
+                <table class="gym-table">
+                    <thead>
+                        <tr>
+                            <th>Email</th>
+                            <th>Status</th>
+                            <th>Data zapisu</th>
+                            <th>Akcja</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var a in attendance)
+                        {
+                            <tr>
+                                <td>@a.Email</td>
+                                <td>@FormatReservationStatus(a.Status)</td>
+                                <td>@a.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
+                                <td>
+                                    <button class="btn-secondary-gym" style="padding:4px 12px; min-width:auto; border-color:#dc3545; color:#dc3545; font-size:0.85em;"
+                                            disabled="@busy" @onclick="() => AskRemoveReservation(a.UserId, a.Email)">
+                                        Wypisz
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        }
+    </div>
+
+    @if (confirmDeleteType is not null)
+    {
+        <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1000;">
+            <div class="gym-card" style="max-width:400px; text-align:center;">
+                <h4 style="margin-top:0;">Potwierdź usunięcie</h4>
+                <p>Czy na pewno usunąć typ <strong>@confirmDeleteTypeName</strong>?</p>
+                <p style="font-size:0.85em; opacity:0.7;">Zostaną usunięte wszystkie powiązane sesje i rezerwacje.</p>
+                <div style="display:flex; gap:10px; justify-content:center; margin-top:15px;">
+                    <button class="btn-primary-gym" style="min-width:0; padding:10px 25px; background:#dc3545; border-color:#dc3545;" disabled="@busy" @onclick="ConfirmDeleteType">
+                        Usuń
+                    </button>
+                    <button class="btn-secondary-gym" style="min-width:0; padding:10px 25px;" @onclick="() => { confirmDeleteType = null; }">
+                        Anuluj
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (confirmDeleteSession is not null)
+    {
+        <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1000;">
+            <div class="gym-card" style="max-width:400px; text-align:center;">
+                <h4 style="margin-top:0;">Potwierdź usunięcie sesji</h4>
+                <p>Czy na pewno usunąć sesję <strong>@confirmDeleteSessionName</strong>?</p>
+                <p style="font-size:0.85em; opacity:0.7;">Zostaną usunięte wszystkie powiązane rezerwacje.</p>
+                <div style="display:flex; gap:10px; justify-content:center; margin-top:15px;">
+                    <button class="btn-primary-gym" style="min-width:0; padding:10px 25px; background:#dc3545; border-color:#dc3545;" disabled="@busy" @onclick="ConfirmDeleteSession">
+                        Usuń
+                    </button>
+                    <button class="btn-secondary-gym" style="min-width:0; padding:10px 25px;" @onclick="() => { confirmDeleteSession = null; }">
+                        Anuluj
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (confirmRemoveUserId is not null)
+    {
+        <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); display:flex; align-items:center; justify-content:center; z-index:1000;">
+            <div class="gym-card" style="max-width:400px; text-align:center;">
+                <h4 style="margin-top:0;">Potwierdź wypisanie</h4>
+                <p>Czy na pewno wypisać <strong>@confirmRemoveEmail</strong> z zajęć?</p>
+                <div style="display:flex; gap:10px; justify-content:center; margin-top:15px;">
+                    <button class="btn-primary-gym" style="min-width:0; padding:10px 25px; background:#dc3545; border-color:#dc3545;" disabled="@busy" @onclick="ConfirmRemoveReservation">
+                        Wypisz
+                    </button>
+                    <button class="btn-secondary-gym" style="min-width:0; padding:10px 25px;" @onclick="() => { confirmRemoveUserId = null; }">
+                        Anuluj
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    bool isAdminChecked = false;
+    bool isAdmin = false;
+    bool busy = false;
+
+    List<ClassTypeDto>? types;
+    List<ClassSessionDto>? schedule;
+    List<AttendanceItem>? attendance;
+
+    string typeName = "";
+    string typeDesc = "";
+    string? typeMsg;
+    string? typeErr;
+
+    Guid sessionTypeId;
+    DateTime? startLocal;
+    DateTime? endLocal;
+    int capacity = 10;
+    string? sessionMsg;
+    string? sessionErr;
+
+    Guid? confirmDeleteType;
+    string? confirmDeleteTypeName;
+
+    Guid? confirmDeleteSession;
+    string? confirmDeleteSessionName;
+
+    Guid? attendanceSessionId;
+    Guid? confirmRemoveUserId;
+    string? confirmRemoveEmail;
+
+    protected override async Task OnInitializedAsync()
+    {
+        startLocal = DateTime.Now.AddHours(1);
+        endLocal = DateTime.Now.AddHours(2);
+
+        var access = await Tokens.GetAccessTokenAsync();
+        if (string.IsNullOrWhiteSpace(access))
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        var role = JwtHelper.GetRole(access);
+        isAdmin = string.Equals(role, "admin", StringComparison.OrdinalIgnoreCase);
+        isAdminChecked = true;
+
+        if (!isAdmin) return;
+
+        await LoadTypes();
+        await LoadSchedule();
+
+        if (types is not null && types.Count > 0)
+            sessionTypeId = types.FirstOrDefault(t => t.IsActive)?.ClassTypeId ?? types[0].ClassTypeId;
+    }
+
+    private async Task LoadTypes()
+    {
+        try
+        {
+            // Admin widzi wszystkie typy (włącznie z nieaktywnymi)
+            types = await Api.Http.GetFromJsonAsync<List<ClassTypeDto>>("classes/types/all");
+        }
+        catch
+        {
+            Nav.NavigateTo("/login");
+        }
+    }
+
+    private async Task CreateType()
+    {
+        if (busy) return;
+        busy = true;
+        typeMsg = null;
+        typeErr = null;
+
+        try
+        {
+            var req = new CreateClassTypeRequest(typeName, string.IsNullOrWhiteSpace(typeDesc) ? null : typeDesc);
+            var res = await Api.Http.PostAsJsonAsync("classes/types", req);
+
+            if (!res.IsSuccessStatusCode)
+            {
+                typeErr = "Nie udało się dodać typu.";
+                return;
+            }
+
+            typeMsg = "Dodano typ zajęć.";
+            typeName = "";
+            typeDesc = "";
+
+            await LoadTypes();
+            if (types is not null && types.Count > 0)
+                sessionTypeId = types.FirstOrDefault(t => t.IsActive)?.ClassTypeId ?? types[0].ClassTypeId;
+        }
+        catch
+        {
+            typeErr = "Błąd połączenia.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void DeleteType(Guid id, string name)
+    {
+        confirmDeleteType = id;
+        confirmDeleteTypeName = name;
+    }
+
+    private async Task ConfirmDeleteType()
+    {
+        if (busy || confirmDeleteType is null) return;
+        busy = true;
+        typeMsg = null;
+        typeErr = null;
+
+        try
+        {
+            var res = await Api.Http.DeleteAsync($"classes/types/{confirmDeleteType}");
+            if (!res.IsSuccessStatusCode)
+            {
+                typeErr = "Nie udało się usunąć typu.";
+                return;
+            }
+
+            typeMsg = $"Usunięto typ {confirmDeleteTypeName}.";
+            confirmDeleteType = null;
+            confirmDeleteTypeName = null;
+
+            await LoadTypes();
+            await LoadSchedule();
+
+            if (types is not null && types.Count > 0)
+                sessionTypeId = types.FirstOrDefault(t => t.IsActive)?.ClassTypeId ?? types[0].ClassTypeId;
+        }
+        catch
+        {
+            typeErr = "Błąd połączenia.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task CreateSession()
+    {
+        if (busy) return;
+        busy = true;
+        sessionMsg = null;
+        sessionErr = null;
+
+        try
+        {
+            if (startLocal is null || endLocal is null)
+            {
+                sessionErr = "Uzupełnij datę startu i końca.";
+                return;
+            }
+
+            if (endLocal <= startLocal)
+            {
+                sessionErr = "Koniec musi być po starcie.";
+                return;
+            }
+
+            var req = new CreateClassSessionRequest(sessionTypeId, startLocal.Value, endLocal.Value, capacity);
+            var res = await Api.Http.PostAsJsonAsync("classes/sessions", req);
+
+            if (!res.IsSuccessStatusCode)
+            {
+                sessionErr = "Nie udało się dodać sesji.";
+                return;
+            }
+
+            sessionMsg = "Dodano sesję.";
+            await LoadSchedule();
+        }
+        catch
+        {
+            sessionErr = "Błąd połączenia.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task LoadSchedule()
+    {
+        try
+        {
+            // Admin widzi wszystko: minione + odwołane
+            schedule = await Api.Http.GetFromJsonAsync<List<ClassSessionDto>>("classes/schedule?includeCanceled=true&includePast=true");
+        }
+        catch
+        {
+            Nav.NavigateTo("/login");
+        }
+    }
+
+    private async Task LoadAttendance(Guid sessionId)
+    {
+        if (busy) return;
+        busy = true;
+        attendanceSessionId = sessionId;
+
+        try
+        {
+            attendance = await Api.Http.GetFromJsonAsync<List<AttendanceItem>>($"classes/sessions/{sessionId}/attendance");
+        }
+        catch { }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task ToggleCancel(Guid sessionId, bool canceled)
+    {
+        if (busy) return;
+        busy = true;
+
+        try
+        {
+            await Api.Http.PatchAsync($"classes/sessions/{sessionId}/cancel?canceled={canceled}", null);
+            await LoadSchedule();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void AskDeleteSession(Guid id, string typeName, DateTime startAt)
+    {
+        confirmDeleteSession = id;
+        confirmDeleteSessionName = $"{typeName} ({startAt.ToLocalTime():yyyy-MM-dd HH:mm})";
+    }
+
+    private async Task ConfirmDeleteSession()
+    {
+        if (busy || confirmDeleteSession is null) return;
+        busy = true;
+
+        try
+        {
+            await Api.Http.DeleteAsync($"classes/sessions/{confirmDeleteSession}");
+            confirmDeleteSession = null;
+            confirmDeleteSessionName = null;
+            attendance = null;
+            await LoadSchedule();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void AskRemoveReservation(Guid userId, string email)
+    {
+        confirmRemoveUserId = userId;
+        confirmRemoveEmail = email;
+    }
+
+    private async Task ConfirmRemoveReservation()
+    {
+        if (busy || confirmRemoveUserId is null || attendanceSessionId is null) return;
+        busy = true;
+
+        try
+        {
+            await Api.Http.DeleteAsync($"classes/sessions/{attendanceSessionId}/reservations/{confirmRemoveUserId}");
+            confirmRemoveUserId = null;
+            confirmRemoveEmail = null;
+            await LoadAttendance(attendanceSessionId.Value);
+            await LoadSchedule();
+        }
+        catch { }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private string FormatReservationStatus(string status) => status switch
+    {
+        "reserved" => "Zarezerwowane",
+        "canceled" => "Anulowane",
+        "attended" => "Obecny",
+        "no_show" => "Nieobecny",
+        _ => status
+    };
+}

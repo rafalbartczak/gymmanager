@@ -1,0 +1,190 @@
+﻿@page "/checkin"
+@implements IAsyncDisposable
+<PageTitle>Zarejestruj wejście</PageTitle>
+
+@using System.Net.Http.Json
+@using GymManager.Client.Services
+@inject ApiHttpClient Api
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<h3 class="page-title">Zarejestruj wejście</h3>
+
+@if (!string.IsNullOrWhiteSpace(successMsg))
+{
+    <div class="alert-success">@successMsg</div>
+}
+@if (!string.IsNullOrWhiteSpace(errorMsg))
+{
+    <div class="alert-error">@errorMsg</div>
+}
+
+@if (awaitingRedirect)
+{
+    <div class="gym-card" style="text-align:center;">
+        <p>Nie posiadasz aktywnego karnetu. Kup karnet, aby wejść na siłownię.</p>
+        <button class="btn-primary-gym" @onclick='() => Nav.NavigateTo("/passes/buy")'>
+            Przejdź do zakupu karnetu
+        </button>
+    </div>
+}
+
+<div class="gym-card">
+    <h4 style="margin-top:0;">Skanuj kod QR klubu</h4>
+
+    @if (!cameraStarted)
+    {
+        <button class="btn-primary-gym" style="width:100%; margin-bottom:15px;" @onclick="StartCamera">
+            📷 Uruchom kamerę
+        </button>
+    }
+    else if (!cameraReady && !cameraError)
+    {
+        <p>Uruchamianie kamery...</p>
+    }
+
+    @if (cameraError)
+    {
+        <div class="alert-error" style="margin:10px 0;">
+            Nie udało się uruchomić kamery. Sprawdź uprawnienia.
+        </div>
+        <button class="btn-secondary-gym" style="margin-bottom:15px;" @onclick="StartCamera">
+            Spróbuj ponownie
+        </button>
+    }
+
+    <div id="qr-reader" style="@(cameraStarted && !cameraError ? "" : "display:none;") max-width:400px; margin:15px auto;"></div>
+</div>
+
+<div class="gym-card">
+    <h4 style="margin-top:0;">Lub wpisz kod ręcznie</h4>
+    <div class="gym-form">
+        <div class="form-group">
+            <input type="text" @bind="manualCode" placeholder="Kod klubu" />
+        </div>
+        <button class="btn-primary-gym" style="width:100%;" disabled="@isBusy" @onclick="SubmitManualCode">
+            Zarejestruj wejście
+        </button>
+    </div>
+</div>
+
+@code {
+    bool cameraStarted = false;
+    bool cameraReady = false;
+    bool cameraError = false;
+    bool isBusy = false;
+    bool awaitingRedirect = false;
+    string manualCode = "";
+    string? successMsg;
+    string? errorMsg;
+
+    DotNetObjectReference<CheckIn>? objRef;
+
+    private async Task StartCamera()
+    {
+        cameraStarted = true;
+        cameraError = false;
+        cameraReady = false;
+        StateHasChanged();
+
+        await Task.Delay(300);
+
+        try
+        {
+            objRef = DotNetObjectReference.Create(this);
+            var result = await JS.InvokeAsync<bool>("startQrScanner", "qr-reader", objRef);
+
+            if (result)
+            {
+                cameraReady = true;
+            }
+            else
+            {
+                cameraError = true;
+            }
+        }
+        catch
+        {
+            cameraError = true;
+        }
+
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task OnQrScanned(string code)
+    {
+        await ProcessCode(code);
+    }
+
+    private async Task SubmitManualCode()
+    {
+        if (string.IsNullOrWhiteSpace(manualCode)) return;
+        await ProcessCode(manualCode.Trim());
+    }
+
+    private async Task ProcessCode(string code)
+    {
+        if (isBusy) return;
+        isBusy = true;
+        successMsg = null;
+        errorMsg = null;
+        awaitingRedirect = false;
+
+        try
+        {
+            var res = await Api.Http.PostAsJsonAsync("entries/checkin", new { ClubCode = code });
+
+            if (res.IsSuccessStatusCode)
+            {
+                successMsg = "Wejście zarejestrowane!";
+                manualCode = "";
+            }
+            else if (res.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                var content = await res.Content.ReadAsStringAsync();
+                if (content.Contains("NO_ACTIVE_PASS"))
+                {
+                    errorMsg = "Brak aktywnego karnetu.";
+                    awaitingRedirect = true;
+                }
+                else if (content.Contains("RECENT_ENTRY"))
+                {
+                    errorMsg = "Wejście już zarejestrowane w ciągu ostatnich 5 minut.";
+                }
+                else
+                {
+                    errorMsg = "Nie udało się zarejestrować wejścia.";
+                }
+            }
+            else if (res.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                errorMsg = "Nieprawidłowy kod klubu.";
+            }
+            else
+            {
+                errorMsg = "Nie udało się zarejestrować wejścia.";
+            }
+        }
+        catch
+        {
+            errorMsg = "Błąd połączenia.";
+        }
+        finally
+        {
+            isBusy = false;
+            StateHasChanged();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("stopQrScanner");
+        }
+        catch { }
+
+        objRef?.Dispose();
+    }
+}

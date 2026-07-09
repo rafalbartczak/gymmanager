@@ -1,0 +1,14 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: gym_sql
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=Change_This_Password_123!
+    ports:
+      - "1433:1433"
+    volumes:
+      - gym_sql_data:/var/opt/mssql
+
+volumes:
+  gym_sql_data:
