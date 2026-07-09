@@ -1,98 +1,51 @@
-\# GymManager — Fitness Club Management System
-
-
+# GymManager - Fitness Club Management System
 
 A single-page web application developed as an engineering thesis project for a Software Engineering degree.
 
-
-
-The project was defended with the \*\*highest grade and distinction\*\*.
-
-
+The project was defended with the **highest grade and distinction**.
 
 GymManager is designed to support fitness club management, including user accounts, memberships, payments, class reservations, club entries, announcements, and an administrative panel.
 
-
-
 The application follows a client-server architecture:
 
+- **ASP.NET Core 8 Web API** — backend
+- **Blazor WebAssembly** — frontend
+- **SQL Server 2022** — database running in a Docker container
+- **Entity Framework Core** — ORM and database migrations
+- **JWT Bearer** — authentication and authorization
 
+---
 
-\- \*\*ASP.NET Core 8 Web API\*\* — backend
+## Table of Contents
 
-\- \*\*Blazor WebAssembly\*\* — frontend
+1. [Tech Stack](#tech-stack)
+2. [Features](#features)
+3. [System Requirements](#system-requirements)
+4. [Tool Installation](#tool-installation)
+5. [Running the Database](#running-the-database)
+6. [Running the Application](#running-the-application)
+7. [First Login and Administrator Account](#first-login-and-administrator-account)
+8. [Project Structure](#project-structure)
+9. [API Endpoints](#api-endpoints)
+10. [Troubleshooting](#troubleshooting)
+11. [Author](#author)
 
-\- \*\*SQL Server 2022\*\* — database running in a Docker container
+---
 
-\- \*\*Entity Framework Core\*\* — ORM and database migrations
-
-\- \*\*JWT Bearer\*\* — authentication and authorization
-
-
-
-\---
-
-
-
-\## Table of Contents
-
-
-
-1\. \[Tech Stack](#tech-stack)
-
-2\. \[Features](#features)
-
-3\. \[System Requirements](#system-requirements)
-
-4\. \[Tool Installation](#tool-installation)
-
-5\. \[Running the Database](#running-the-database)
-
-6\. \[Running the Application](#running-the-application)
-
-7\. \[First Login and Administrator Account](#first-login-and-administrator-account)
-
-8\. \[Project Structure](#project-structure)
-
-9\. \[API Endpoints](#api-endpoints)
-
-10\. \[Troubleshooting](#troubleshooting)
-
-11\. \[Author](#author)
-
-
-
-\---
-
-
-
-\## Tech Stack
-
-
+## Tech Stack
 
 | Layer | Technology | Version |
-
 |---|---|---|
-
 | Backend | ASP.NET Core Web API | 8.0 |
-
 | Frontend | Blazor WebAssembly | 8.0 |
-
 | ORM | Entity Framework Core | 9.0 |
-
 | Database | Microsoft SQL Server | 2022 |
-
 | Containerization | Docker Compose | v2 |
-
 | Authentication | JWT Bearer | - |
-
 | Password Hashing | PBKDF2 | - |
-
 | API Documentation | Swagger / OpenAPI | 3.0 |
 
-
-
-> The project targets \*\*.NET 8\*\*, while Entity Framework Core packages use version \*\*9.x\*\*.
+> The project targets **.NET 8**, while Entity Framework Core packages use version **9.x**.
 
 
 
